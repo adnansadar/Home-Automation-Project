@@ -1,0 +1,202 @@
+//ANDROID APP CODE
+
+MAIN ACTIVITY
+
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.content.Intent;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+import java.util.ArrayList;
+import java.util.Set;
+public class DeviceList extends AppCompatActivity {
+Button btnPaired;
+ListView devicelist;
+private BluetoothAdapter myBluetooth = null;
+private Set&lt;BluetoothDevice&gt; pairedDevices;
+public static String EXTRA_ADDRESS = &quot;device_address&quot;;
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+super.onCreate(savedInstanceState);
+setContentView(R.layout.activity_device_list);
+btnPaired = (Button) findViewById(R.id.button);
+devicelist = (ListView) findViewById(R.id.listView);
+myBluetooth = BluetoothAdapter.getDefaultAdapter();
+if ( myBluetooth==null ) {
+Toast.makeText(getApplicationContext(), &quot;Bluetooth device not available&quot;,
+Toast.LENGTH_LONG).show();
+finish();
+} else if ( !myBluetooth.isEnabled() ) {
+Intent turnBTon = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+startActivityForResult(turnBTon, 1);
+}
+btnPaired.setOnClickListener(new View.OnClickListener() {
+@Override
+public void onClick(View v) {
+pairedDevicesList();
+}
+});
+}
+private void pairedDevicesList () {
+pairedDevices = myBluetooth.getBondedDevices();
+ArrayList list = new ArrayList();
+if ( pairedDevices.size() &gt; 0 ) {
+for ( BluetoothDevice bt : pairedDevices ) {
+list.add(bt.getName().toString() + &quot;\n&quot; + bt.getAddress().toString());
+}
+} else {
+Toast.makeText(getApplicationContext(), &quot;No Paired Bluetooth Devices Found.&quot;,
+Toast.LENGTH_LONG).show();
+}
+
+final ArrayAdapter adapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, list);
+devicelist.setAdapter(adapter);
+devicelist.setOnItemClickListener(myListClickListener);
+}
+private AdapterView.OnItemClickListener myListClickListener = new AdapterView.OnItemClickListener() {
+@Override
+public void onItemClick(AdapterView&lt;?&gt; parent, View view, int position, long id) {
+String info = ((TextView) view).getText().toString();
+String address = info.substring(info.length()-17);
+Intent i = new Intent(DeviceList.this, ledControl.class);
+i.putExtra(EXTRA_ADDRESS, address);
+startActivity(i);
+}
+};
+}
+2 ND ACTIVITY
+import android.app.ProgressDialog;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.Intent;
+import android.os.AsyncTask;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.Toast;
+import org.w3c.dom.Text;
+import java.io.IOException;
+import java.util.UUID;
+public class ledControl extends AppCompatActivity {
+Button btn1, btn2, btn3, btn4, btnDis;
+String address = null;
+TextView lumn;
+private ProgressDialog progress;
+BluetoothAdapter myBluetooth = null;
+BluetoothSocket btSocket = null;
+private boolean isBtConnected = false;
+static final UUID myUUID = UUID.fromString(&quot;00001101-0000-1000-8000-00805F9B34FB&quot;);
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+super.onCreate(savedInstanceState);
+Intent newint = getIntent();
+address = newint.getStringExtra(DeviceList.EXTRA_ADDRESS);
+setContentView(R.layout.activity_led_control);
+btn1 = (Button) findViewById(R.id.button1);
+btn2 = (Button) findViewById(R.id.button2);
+btn3 = (Button) findViewById(R.id.button3);
+btn4 = (Button) findViewById(R.id.button4);
+btnDis = (Button) findViewById(R.id.button5);
+lumn = (TextView) findViewById(R.id.textView2);
+
+new ConnectBT().execute();
+btn1.setOnClickListener(new View.OnClickListener() {
+@Override
+public void onClick (View v) {
+sendSignal(&quot;1&quot;);
+}
+});
+btn2.setOnClickListener(new View.OnClickListener() {
+@Override
+public void onClick (View v) {
+sendSignal(&quot;2&quot;);
+}
+});
+btn3.setOnClickListener(new View.OnClickListener() {
+@Override
+public void onClick (View v) {
+sendSignal(&quot;3&quot;);
+}
+});
+btn4.setOnClickListener(new View.OnClickListener() {
+@Override
+public void onClick (View v) {
+sendSignal(&quot;4&quot;);
+}
+});
+btnDis.setOnClickListener(new View.OnClickListener() {
+@Override
+public void onClick (View v) {
+Disconnect();
+}
+});
+}
+private void sendSignal ( String number ) {
+if ( btSocket != null ) {
+try {
+btSocket.getOutputStream().write(number.toString().getBytes());
+} catch (IOException e) {
+msg(&quot;Error&quot;);
+}
+}
+}
+private void Disconnect () {
+if ( btSocket!=null ) {
+try {
+btSocket.close();
+} catch(IOException e) {
+msg(&quot;Error&quot;);
+}
+}
+finish();
+}
+private void msg (String s) {
+
+Toast.makeText(getApplicationContext(), s, Toast.LENGTH_LONG).show();
+}
+private class ConnectBT extends AsyncTask&lt;Void, Void, Void&gt; {
+private boolean ConnectSuccess = true;
+@Override
+protected void onPreExecute () {
+progress = ProgressDialog.show(ledControl.this, &quot;Connecting...&quot;, &quot;Please Wait!!!&quot;);
+}
+@Override
+protected Void doInBackground (Void... devices) {
+try {
+if ( btSocket==null || !isBtConnected ) {
+myBluetooth = BluetoothAdapter.getDefaultAdapter();
+BluetoothDevice dispositivo = myBluetooth.getRemoteDevice(address);
+btSocket = dispositivo.createInsecureRfcommSocketToServiceRecord(myUUID);
+BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
+btSocket.connect();
+}
+} catch (IOException e) {
+ConnectSuccess = false;
+}
+return null;
+}
+@Override
+protected void onPostExecute (Void result) {
+super.onPostExecute(result);
+if (!ConnectSuccess) {
+msg(&quot;Connection Failed. Is it a SPP Bluetooth? Try again.&quot;);
+finish();
+} else {
+msg(&quot;Connected&quot;);
+isBtConnected = true;
+}
+progress.dismiss();
+}
+}
+}
